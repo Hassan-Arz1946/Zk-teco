@@ -1,29 +1,29 @@
 <?php
 date_default_timezone_set('Asia/Karachi');
 
-$logsFile = 'logs.json';
-$logs = file_exists($logsFile) ? json_decode(file_get_contents($logsFile), true) : [];
-
 $uri = $_SERVER['REQUEST_URI'];
 $method = $_SERVER['REQUEST_METHOD'];
+$logsFile = 'logs.json';
 
-// Handle /iclock/cdata
+// Load logs from file
+$logs = file_exists($logsFile) ? json_decode(file_get_contents($logsFile), true) : [];
+
 if ($uri === '/iclock/cdata' && $method === 'POST') {
     $rawData = file_get_contents("php://input");
-    $lines = explode("\n", trim($rawData));
 
+    $lines = explode("\n", trim($rawData));
     foreach ($lines as $line) {
         $parts = explode("\t", trim($line));
         if (count($parts) < 3 || stripos($parts[0], 'OPLOG') === 0) continue;
 
         $userId = $parts[0];
         $statusCode = $parts[2];
-        $now = new DateTime('now', new DateTimeZone('Asia/Karachi'));
+        $now = new DateTime("now", new DateTimeZone("Asia/Karachi"));
+        $minutes = (int)$now->format('H') * 60 + (int)$now->format('i');
 
-        $timeMin = (int)$now->format('H') * 60 + (int)$now->format('i');
         $status = 'Unknown';
-        if ($statusCode === '0') $status = ($timeMin > 540) ? 'Check-In (Short)' : 'Check-In';        // after 9:00
-        if ($statusCode === '1') $status = ($timeMin < 1020) ? 'Check-Out (Short)' : 'Check-Out';     // before 17:00
+        if ($statusCode === '0') $status = $minutes > 540 ? 'Check-In (Short)' : 'Check-In';
+        if ($statusCode === '1') $status = $minutes < 1020 ? 'Check-Out (Short)' : 'Check-Out';
 
         $logs[] = [
             'userId' => $userId,
@@ -31,6 +31,7 @@ if ($uri === '/iclock/cdata' && $method === 'POST') {
             'time' => $now->format('H:i:s'),
             'date' => $now->format('Y-m-d')
         ];
+
         if (count($logs) > 50) array_shift($logs);
     }
 
@@ -39,14 +40,13 @@ if ($uri === '/iclock/cdata' && $method === 'POST') {
     exit;
 }
 
-// Handle /api/logs
 if ($uri === '/api/logs') {
     header('Content-Type: application/json');
     echo json_encode($logs);
     exit;
 }
 
-// Serve Dashboard
+// Default: Serve dashboard
 ?>
 <!DOCTYPE html>
 <html>
