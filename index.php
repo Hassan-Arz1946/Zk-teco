@@ -5,20 +5,18 @@ $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'];
 $logsFile = 'logs.json';
 
-// Load logs from file
+// Load existing logs from file
 $logs = file_exists($logsFile) ? json_decode(file_get_contents($logsFile), true) : [];
 
-// ✅ Handle ZKTeco handshake (GET request to /iclock/cdata)
+// ✅ ZKTeco GET handshake
 if (strpos($uri, '/iclock/cdata') === 0 && $method === 'GET') {
     echo "OK\n";
     exit;
 }
 
-// ✅ Handle ZKTeco data push (POST to /iclock/cdata)
+// ✅ ZKTeco POST data push
 if (strpos($uri, '/iclock/cdata') === 0 && $method === 'POST') {
     $rawData = file_get_contents("php://input");
-
-    // Log to console (Railway logs)
     file_put_contents('php://stderr', "📥 RAW PUSH: $rawData\n", FILE_APPEND);
 
     $lines = explode("\n", trim($rawData));
@@ -51,14 +49,14 @@ if (strpos($uri, '/iclock/cdata') === 0 && $method === 'POST') {
     exit;
 }
 
-// ✅ API for frontend
+// ✅ API: return logs in JSON
 if ($uri === '/api/logs') {
     header('Content-Type: application/json');
     echo json_encode(array_reverse($logs));
     exit;
 }
 
-// ✅ Default route: show dashboard
+// ✅ Default route: render dashboard
 ?>
 <!DOCTYPE html>
 <html>
