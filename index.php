@@ -1,15 +1,25 @@
 <?php
 date_default_timezone_set('Asia/Karachi');
 
-$uri = $_SERVER['REQUEST_URI'];
+$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $method = $_SERVER['REQUEST_METHOD'];
 $logsFile = 'logs.json';
 
 // Load logs from file
 $logs = file_exists($logsFile) ? json_decode(file_get_contents($logsFile), true) : [];
 
-if ($uri === '/iclock/cdata' && $method === 'POST') {
+// ✅ Handle ZKTeco handshake (GET request to /iclock/cdata)
+if (strpos($uri, '/iclock/cdata') === 0 && $method === 'GET') {
+    echo "OK\n";
+    exit;
+}
+
+// ✅ Handle ZKTeco data push (POST to /iclock/cdata)
+if (strpos($uri, '/iclock/cdata') === 0 && $method === 'POST') {
     $rawData = file_get_contents("php://input");
+
+    // Log to console (Railway logs)
+    file_put_contents('php://stderr', "📥 RAW PUSH: $rawData\n", FILE_APPEND);
 
     $lines = explode("\n", trim($rawData));
     foreach ($lines as $line) {
@@ -18,8 +28,9 @@ if ($uri === '/iclock/cdata' && $method === 'POST') {
 
         $userId = $parts[0];
         $statusCode = $parts[2];
-        $now = new DateTime("now", new DateTimeZone("Asia/Karachi"));
-        $minutes = (int)$now->format('H') * 60 + (int)$now->format('i');
+
+        $now = new DateTime('now', new DateTimeZone('Asia/Karachi'));
+        $minutes = intval($now->format('H')) * 60 + intval($now->format('i'));
 
         $status = 'Unknown';
         if ($statusCode === '0') $status = $minutes > 540 ? 'Check-In (Short)' : 'Check-In';
@@ -36,24 +47,26 @@ if ($uri === '/iclock/cdata' && $method === 'POST') {
     }
 
     file_put_contents($logsFile, json_encode($logs));
-    echo "OK";
+    echo "OK\n";
     exit;
 }
 
+// ✅ API for frontend
 if ($uri === '/api/logs') {
     header('Content-Type: application/json');
-    echo json_encode($logs);
+    echo json_encode(array_reverse($logs));
     exit;
 }
 
-// Default: Serve dashboard
+// ✅ Default route: show dashboard
 ?>
 <!DOCTYPE html>
 <html>
 <head>
-  <title>ZKTeco Dashboard</title>
+  <meta charset="UTF-8">
+  <title>ZKTeco Attendance Dashboard</title>
   <style>
-    body { font-family: Arial; background: #f5f5f5; padding: 20px; }
+    body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
     table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 0 10px #ccc; }
     th, td { padding: 10px; border: 1px solid #ddd; text-align: center; }
     th { background: red; color: white; }
@@ -62,9 +75,7 @@ if ($uri === '/api/logs') {
 <body>
   <h2>ZKTeco Attendance Logs</h2>
   <table>
-    <thead>
-      <tr><th>User ID</th><th>Status</th><th>Time</th><th>Date</th></tr>
-    </thead>
+    <thead><tr><th>User ID</th><th>Status</th><th>Time</th><th>Date</th></tr></thead>
     <tbody id="logTable"></tbody>
   </table>
 
@@ -74,7 +85,7 @@ if ($uri === '/api/logs') {
       const data = await res.json();
       const table = document.getElementById('logTable');
       table.innerHTML = '';
-      data.reverse().forEach(log => {
+      data.forEach(log => {
         table.innerHTML += `<tr>
           <td>${log.userId}</td>
           <td>${log.status}</td>
